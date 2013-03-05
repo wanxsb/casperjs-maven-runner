@@ -1,10 +1,16 @@
 package jp.co.worksap.casperJsRunner.mojo;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.maven.plugin.AbstractMojo;
@@ -67,15 +73,68 @@ public class CasperJsRunnerMojo extends AbstractMojo {
 	
 	
 	private static FileSetManager fileSetManager = new FileSetManager();
-	
+	private static final String casperTesterXmlDirectoryName = "testerxml";
 	@Override
 	public void execute() throws MojoExecutionException, MojoFailureException {
-		getLog().debug("start");
 		printConfigInfo();
+		int retCode = 0;
 		copyBaseDir();
 		for(String filename: fileSetManager.getIncludedFiles(testFiles)){
-			getLog().debug("filename="+filename);
+			getLog().info("Testing js file: "+filename);
+			retCode +=runJsFileOnPhantom(filename);
 		}
+		
+		if (!ignoreFailures) {
+			if (retCode > 0) {
+				throw new MojoFailureException("One or more casperJs tests failed");
+			}
+		}
+	}
+	
+	private int runJsFileOnPhantom(String filename){
+		int exitVal = 255;
+		try{
+		List<String> paramLists = new ArrayList<String>();
+		paramLists.addAll(convertPhantomCmdLine());
+		paramLists.add(buildDirectory.toString()+"/"+filename);
+		getLog().info("casperJs running params:"+paramLists.toString());
+		Process process = new ProcessBuilder(paramLists).start();
+		captureOutput(filename, process);
+		exitVal = process.waitFor();
+		}catch(IOException e){
+			getLog().error(e);
+		} catch (InterruptedException e) {
+			getLog().error(e);
+		}		
+		return exitVal;
+	}
+	
+	private void captureOutput(String testFile, Process pr) throws IOException {
+		// Grab STDOUT of execution (this is the junit xml output generated
+		// by the js), write to file
+		BufferedReader input = new BufferedReader(new InputStreamReader(
+				pr.getInputStream()));
+		File jUnitXmlOutputPath = new File(buildDirectory + "/"
+				+ casperTesterXmlDirectoryName);
+
+		jUnitXmlOutputPath.mkdir();
+		File resultsFile = new File(jUnitXmlOutputPath, testFile + ".xml");
+
+		// Write out the stdout from phantomjs to the junit xml file.
+		BufferedWriter output = new BufferedWriter(new FileWriter(resultsFile));
+		String line = null;
+		while ((line = input.readLine()) != null) {
+			output.write(line);
+		}
+		output.close();
+	}
+	
+	private List<String> convertPhantomCmdLine(){
+		List<String> phantomParams = new ArrayList<String>();
+		for(String param: phantomJsExecOrCasperJsExec.split(" ")){
+			phantomParams.add(param);
+		}
+		return phantomParams;
 	}
 	
 	private void printConfigInfo(){
