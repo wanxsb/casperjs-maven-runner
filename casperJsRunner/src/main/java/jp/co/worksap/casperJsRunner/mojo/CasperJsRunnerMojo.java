@@ -74,7 +74,7 @@ public class CasperJsRunnerMojo extends AbstractMojo {
 	
 	private static FileSetManager fileSetManager = new FileSetManager();
 	private static final String casperTesterXmlDirectoryName = "testerxml";
-	@Override
+	
 	public void execute() throws MojoExecutionException, MojoFailureException {
 		printConfigInfo();
 		int retCode = 0;
